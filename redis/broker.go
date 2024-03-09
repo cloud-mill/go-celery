@@ -7,24 +7,23 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-
 	"github.com/cloud-mill/go-celery/models"
+	"github.com/go-redis/redis/v8"
 )
 
-type CeleryBroker struct {
+type CeleryRedisBroker struct {
 	RedisClient *redis.Client
 	QueueName   string
 }
 
-func NewRedisCeleryBroker(redisClient *redis.Client) *CeleryBroker {
-	return &CeleryBroker{
+func NewRedisCeleryRedisBroker(redisClient *redis.Client) *CeleryRedisBroker {
+	return &CeleryRedisBroker{
 		RedisClient: redisClient,
 		QueueName:   "go-celery",
 	}
 }
 
-func (celeryBroker *CeleryBroker) SendCeleryMessage(
+func (celeryRedisBroker *CeleryRedisBroker) SendCeleryMessage(
 	ctx context.Context,
 	message models.CeleryMessage,
 ) error {
@@ -33,7 +32,8 @@ func (celeryBroker *CeleryBroker) SendCeleryMessage(
 		return err
 	}
 
-	_, err = celeryBroker.RedisClient.LPush(ctx, celeryBroker.QueueName, jsonBytes).Result()
+	_, err = celeryRedisBroker.RedisClient.LPush(ctx, celeryRedisBroker.QueueName, jsonBytes).
+		Result()
 	if err != nil {
 		return err
 	}
@@ -41,11 +41,12 @@ func (celeryBroker *CeleryBroker) SendCeleryMessage(
 	return nil
 }
 
-func (celeryBroker *CeleryBroker) getCeleryMessage(
+func (celeryRedisBroker *CeleryRedisBroker) getCeleryMessage(
 	ctx context.Context,
 ) (*models.CeleryMessage, error) {
 	// BRPOP command to pop the last(right) message from the list (queue), with a timeout of 1 second
-	res, err := celeryBroker.RedisClient.BRPop(ctx, 1*time.Second, celeryBroker.QueueName).Result()
+	res, err := celeryRedisBroker.RedisClient.BRPop(ctx, 1*time.Second, celeryRedisBroker.QueueName).
+		Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
@@ -67,8 +68,10 @@ func (celeryBroker *CeleryBroker) getCeleryMessage(
 	return &message, nil
 }
 
-func (celeryBroker *CeleryBroker) GetTaskMessage(ctx context.Context) (*models.TaskMessage, error) {
-	celeryMessage, err := celeryBroker.getCeleryMessage(ctx)
+func (celeryRedisBroker *CeleryRedisBroker) GetTaskMessage(
+	ctx context.Context,
+) (*models.TaskMessage, error) {
+	celeryMessage, err := celeryRedisBroker.getCeleryMessage(ctx)
 	if err != nil || celeryMessage == nil {
 		return nil, err
 	}

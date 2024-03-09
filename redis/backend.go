@@ -10,21 +10,21 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-type CeleryBackend struct {
+type CeleryRedisBackend struct {
 	RedisClient *redis.Client
 }
 
-func NewRedisBackend(redisClient *redis.Client) *CeleryBackend {
-	return &CeleryBackend{
+func NewCeleryRedisBackend(redisClient *redis.Client) *CeleryRedisBackend {
+	return &CeleryRedisBackend{
 		RedisClient: redisClient,
 	}
 }
 
-func (celeryBackend *CeleryBackend) GetResult(
+func (celeryRedisBackend *CeleryRedisBackend) GetResult(
 	ctx context.Context,
 	taskId string,
 ) (*models.ResultMessage, error) {
-	val, err := celeryBackend.RedisClient.Get(ctx, taskId).Bytes()
+	val, err := celeryRedisBackend.RedisClient.Get(ctx, taskId).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, fmt.Errorf("result not available for task Id: %s", taskId)
 	} else if err != nil {
