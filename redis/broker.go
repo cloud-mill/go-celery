@@ -17,7 +17,7 @@ type CeleryBroker struct {
 	QueueName   string
 }
 
-func NewRedisBroker(redisClient *redis.Client) *CeleryBroker {
+func NewRedisCeleryBroker(redisClient *redis.Client) *CeleryBroker {
 	return &CeleryBroker{
 		RedisClient: redisClient,
 		QueueName:   "go-celery",
