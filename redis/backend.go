@@ -2,12 +2,12 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cloud-mill/go-celery/logger"
 
-	"github.com/cloud-mill/go-celery/models"
 	"github.com/go-redis/redis/v8"
+	"go.uber.org/zap"
 )
 
 type CeleryRedisBackend struct {
@@ -20,21 +20,31 @@ func NewCeleryRedisBackend(redisClient *redis.Client) *CeleryRedisBackend {
 	}
 }
 
-func (celeryRedisBackend *CeleryRedisBackend) GetResult(
+func (backend *CeleryRedisBackend) GetResult(
 	ctx context.Context,
 	taskId string,
-) (*models.ResultMessage, error) {
-	val, err := celeryRedisBackend.RedisClient.Get(ctx, taskId).Bytes()
+) (interface{}, error) {
+	val, err := backend.RedisClient.Get(ctx, taskId).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return nil, fmt.Errorf("result not available for task Id: %s", taskId)
+		err := fmt.Errorf("result not available for task Id: %s", taskId)
+		logger.Logger.Error("result not available", zap.String("taskId", taskId), zap.Error(err))
+		return nil, err
 	} else if err != nil {
+		logger.Logger.Error("failed to get result", zap.String("taskId", taskId), zap.Error(err))
 		return nil, err
 	}
 
-	var resultMessage models.ResultMessage
-	if err := json.Unmarshal(val, &resultMessage); err != nil {
-		return nil, fmt.Errorf("error unmarshalling result for task Id %s: %w", taskId, err)
-	}
+	return val, nil
+}
 
-	return &resultMessage, nil
+func (backend *CeleryRedisBackend) SetResult(
+	ctx context.Context,
+	taskId string,
+	result interface{},
+) error {
+	err := backend.RedisClient.Set(ctx, taskId, result, 0).Err()
+	if err != nil {
+		logger.Logger.Error("failed to set result", zap.String("taskId", taskId), zap.Error(err))
+	}
+	return err
 }
