@@ -7,19 +7,25 @@ import (
 )
 
 type Broker interface {
-	SendCeleryMessage(
+	SendTaskMessage(
 		ctx context.Context,
-		message models.CeleryMessage,
+		taskMessage models.TaskMessage,
 	) error
 	GetTaskMessage(ctx context.Context) (*models.TaskMessage, error)
+
+	SendTaskReceivedEvent(ctx context.Context, event models.TaskReceivedEvent) error
+	SendTaskStartedEvent(ctx context.Context, event models.TaskStartedEvent) error
+	SendTaskSucceededEvent(ctx context.Context, event models.TaskSucceededEvent) error
+	SendTaskFailedEvent(ctx context.Context, event models.TaskFailedEvent) error
 }
 
 type Backend interface {
-	GetResult(ctx context.Context, taskId string) (*models.ResultMessage, error)
-	SetResult(ctx context.Context, taskId string, result models.ResultMessage) error
+	GetResult(ctx context.Context, taskId string) (interface{}, error)
+	SetResult(ctx context.Context, taskId string, result interface{}) error
 }
 
 type Task interface {
 	ParseKwargs(map[string]interface{}) error
 	RunTask() (interface{}, error)
+	HandleEvent(ctx context.Context, event models.BaseEvent) error
 }
