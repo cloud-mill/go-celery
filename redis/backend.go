@@ -22,15 +22,15 @@ func NewCeleryRedisBackend(redisClient *redis.Client) *CeleryRedisBackend {
 
 func (backend *CeleryRedisBackend) GetResult(
 	ctx context.Context,
-	taskId string,
+	taskID string,
 ) (interface{}, error) {
-	val, err := backend.RedisClient.Get(ctx, taskId).Bytes()
+	val, err := backend.RedisClient.Get(ctx, taskID).Bytes()
 	if errors.Is(err, redis.Nil) {
-		err := fmt.Errorf("result not available for task Id: %s", taskId)
-		logger.Logger.Error("result not available", zap.String("taskId", taskId), zap.Error(err))
+		err := fmt.Errorf("result not available for task Id: %s", taskID)
+		logger.Logger.Error("result not available", zap.String("taskID", taskID), zap.Error(err))
 		return nil, err
 	} else if err != nil {
-		logger.Logger.Error("failed to get result", zap.String("taskId", taskId), zap.Error(err))
+		logger.Logger.Error("failed to get result", zap.String("taskID", taskID), zap.Error(err))
 		return nil, err
 	}
 
@@ -39,12 +39,12 @@ func (backend *CeleryRedisBackend) GetResult(
 
 func (backend *CeleryRedisBackend) SetResult(
 	ctx context.Context,
-	taskId string,
+	taskID string,
 	result interface{},
 ) error {
-	err := backend.RedisClient.Set(ctx, taskId, result, 0).Err()
+	err := backend.RedisClient.Set(ctx, taskID, result, 0).Err()
 	if err != nil {
-		logger.Logger.Error("failed to set result", zap.String("taskId", taskId), zap.Error(err))
+		logger.Logger.Error("failed to set result", zap.String("taskID", taskID), zap.Error(err))
 	}
 	return err
 }

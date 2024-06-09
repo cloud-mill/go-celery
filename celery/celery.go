@@ -20,8 +20,8 @@ type Broker interface {
 }
 
 type Backend interface {
-	GetResult(ctx context.Context, taskId string) (interface{}, error)
-	SetResult(ctx context.Context, taskId string, result interface{}) error
+	GetResult(ctx context.Context, taskID string) (interface{}, error)
+	SetResult(ctx context.Context, taskID string, result interface{}) error
 }
 
 type Task interface {
