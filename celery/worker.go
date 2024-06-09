@@ -3,6 +3,7 @@ package celery
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -83,7 +84,7 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			taskMsg, err := wp.broker.GetTaskMessage(ctx)
+			taskMessage, err := wp.broker.GetTaskMessage(ctx)
 			if err != nil {
 				logger.Logger.Error(
 					"broker failed to get task message",
@@ -93,47 +94,94 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 				continue
 			}
 
-			if taskMsg == nil {
+			if taskMessage == nil {
 				continue
 			}
 
-			result, err := wp.executeTask(*taskMsg)
+			receivedEvent := models.TaskReceivedEvent{
+				BaseEvent: models.BaseEvent{
+					Event:     models.EventTaskReceived,
+					UUID:      taskMessage.Headers.ID,
+					Timestamp: time.Now(),
+					Type:      taskMessage.Headers.Task,
+					Hostname:  "worker" + strconv.Itoa(id),
+				},
+				Args:   taskMessage.Body.Args,
+				Kwargs: taskMessage.Body.Kwargs,
+			}
+			_ = wp.broker.SendTaskReceivedEvent(ctx, receivedEvent)
+
+			startedEvent := models.TaskStartedEvent{
+				BaseEvent: models.BaseEvent{
+					Event:     models.EventTaskStarted,
+					UUID:      taskMessage.Headers.ID,
+					Timestamp: time.Now(),
+					Type:      taskMessage.Headers.Task,
+					Hostname:  "worker" + strconv.Itoa(id),
+				},
+			}
+			_ = wp.broker.SendTaskStartedEvent(ctx, startedEvent)
+
+			result, err := wp.executeTask(*taskMessage)
 			if err != nil {
 				logger.Logger.Error(
 					"worker failed to run task",
-					zap.String("task message id", taskMsg.Id),
+					zap.String("task message id", taskMessage.Headers.ID),
+					zap.Error(err),
+				)
+
+				failedEvent := models.TaskFailedEvent{
+					BaseEvent: models.BaseEvent{
+						Event:     models.EventTaskFailed,
+						UUID:      taskMessage.Headers.ID,
+						Timestamp: time.Now(),
+						Type:      taskMessage.Headers.Task,
+						Hostname:  "worker" + strconv.Itoa(id),
+					},
+					Exception: err.Error(),
+					Traceback: "",
+				}
+				_ = wp.broker.SendTaskFailedEvent(ctx, failedEvent)
+				continue
+			}
+
+			if err = wp.backend.SetResult(ctx, taskMessage.Headers.ID, result); err != nil {
+				logger.Logger.Error(
+					"failed to push task result",
+					zap.String("taskMessageId", taskMessage.Headers.ID),
 					zap.Error(err),
 				)
 				continue
 			}
 
-			if err = wp.backend.SetResult(ctx, taskMsg.Id, *result); err != nil {
-				logger.Logger.Error(
-					"failed to push task result",
-					zap.String("taskMessageId", taskMsg.Id),
-					zap.Error(err),
-				)
+			succeededEvent := models.TaskSucceededEvent{
+				BaseEvent: models.BaseEvent{
+					Event:     models.EventTaskSucceeded,
+					UUID:      taskMessage.Headers.ID,
+					Timestamp: time.Now(),
+					Type:      taskMessage.Headers.Task,
+					Hostname:  "worker" + strconv.Itoa(id),
+				},
+				Result: result,
 			}
+			_ = wp.broker.SendTaskSucceededEvent(ctx, succeededEvent)
 		}
 	}
 }
 
-func (wp *WorkerPool) executeTask(message models.TaskMessage) (*models.ResultMessage, error) {
-	celeryTask := wp.getTask(message.Task)
-	if celeryTask == nil {
-		return nil, fmt.Errorf("task %s is not registered", message.Task)
+func (wp *WorkerPool) executeTask(message models.TaskMessage) (interface{}, error) {
+	task := wp.getTask(message.Headers.Task)
+	if task == nil {
+		return nil, fmt.Errorf("task %s is not registered", message.Headers.Task)
 	}
 
-	if err := celeryTask.ParseKwargs(message.Kwargs); err != nil {
+	if err := task.ParseKwargs(message.Body.Kwargs); err != nil {
 		return nil, err
 	}
-	val, err := celeryTask.RunTask()
+	val, err := task.RunTask()
 	if err != nil {
 		return nil, err
 	}
 
-	return &models.ResultMessage{
-		Status: "SUCCESS",
-		Result: val,
-	}, nil
+	return val, nil
 }
