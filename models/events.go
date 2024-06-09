@@ -2,6 +2,15 @@ package models
 
 import "time"
 
+const (
+	EventTaskReceived  = "task-received"
+	EventTaskStarted   = "task-started"
+	EventTaskSucceeded = "task-succeeded"
+	EventTaskFailed    = "task-failed"
+	EventTaskRevoked   = "task-revoked"
+	EventTaskRetry     = "task-retry"
+)
+
 type BaseEvent struct {
 	Event     string    `json:"event"`
 	UUID      string    `json:"uuid"`
